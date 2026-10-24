@@ -1,0 +1,19 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: ci-cd-pipeline-run-
+spec:
+  pipelineRef:
+    name: ci-cd-pipeline
+  params:
+    - name: repo-url
+      value: https://github.com/FuricBond/ci-cd-final-project
+    - name: image-name
+      value: us.icr.io/sn-labs-vidaldeo24/ci-cd-final-project:latest
+  workspaces:
+    - name: shared-workspace
+      persistentVolumeClaim:
+        claimName: oc-lab-pvc
+    - name: registry-auth
+      secret:
+        secretName: icr
