@@ -1,0 +1,96 @@
+
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: ci-cd-pipeline
+
+spec:
+  workspaces:
+    - name: shared-workspace
+    - name: registry-auth
+
+  params:
+    - name: repo-url
+      type: string
+      default: https://github.com/FuricBond/ci-cd-final-project
+
+    - name: image-name
+      type: string
+      description: Fully qualified container image name to build and push
+
+  tasks:
+    - name: cleanup
+      taskRef:
+        name: cleanup
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    - name: fetch-repository
+      runAfter:
+        - cleanup
+      taskRef:
+        name: git-clone
+      params:
+        - name: URL
+          value: $(params.repo-url)
+        - name: REVISION
+          value: main
+        - name: DELETE_EXISTING
+          value: "true"
+      workspaces:
+        - name: output
+          workspace: shared-workspace
+
+    - name: lint
+      runAfter:
+        - fetch-repository
+      taskRef:
+        name: flake8
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    - name: unit-tests
+      runAfter:
+        - lint
+      taskRef:
+        name: nose
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    - name: build-image
+      runAfter:
+        - unit-tests
+      taskRef:
+        name: buildah
+      params:
+        - name: IMAGE
+          value: $(params.image-name)
+        - name: DOCKERFILE
+          value: ./Dockerfile
+        - name: CONTEXT
+          value: .
+        - name: STORAGE_DRIVER
+          value: vfs
+        - name: FORMAT
+          value: oci
+        - name: TLS_VERIFY
+          value: "true"
+        - name: SKIP_PUSH
+          value: "false"
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+        - name: dockerconfig
+          workspace: registry-auth
+
+    - name: deploy
+      runAfter:
+        - build-image
+      taskRef:
+        name: openshift-client
+      params:
+        - name: SCRIPT
+          value: oc new-app us.icr.io/sn-labs-vidaldeo24/ci-cd-final-project:latest --name=ci-cd-final-project
